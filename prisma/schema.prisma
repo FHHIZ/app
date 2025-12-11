@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+  output     = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id            String          @id @default(uuid())
+  name          String
+  username      String          @unique
+  email         String          @unique
+  password      String
+  photo_profile String?
+  role          Role            @default(user)
+  posts         posts[]
+  likes         like[]
+  comments      comments[]
+  bookmarks     bookmarks[]
+  createdAt     DateTime        @default(now())
+  commentsLikes comments_like[]
+}
+
+model posts {
+  id             String           @id @default(uuid())
+  user_id        String
+  slug           String           @unique
+  status         Status           @default(draft)
+  title          String
+  thumbnail      String
+  content        String
+  likes          like[]
+  comments       comments[]
+  bookmarks      bookmarks[]
+  postCategories postCategories[]
+  postTags       post_tags[]
+  createdAt      DateTime         @default(now())
+  updateAt       DateTime         @updatedAt
+  author         users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model categories {
+  id             String           @id @default(uuid())
+  name           String
+  slug           String           @unique
+  postCategories postCategories[]
+}
+
+model tags {
+  id       String      @id @default(uuid())
+  name     String
+  slug     String      @unique
+  postTags post_tags[]
+}
+
+model postCategories {
+  post_id         String
+  category_id     String
+  selected_post   posts      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  chosed_category categories @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@id([post_id]) // composite primary key
+}
+
+model post_tags {
+  post_id       String
+  tag_id        String
+  selected_post posts  @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  chosed_tags   tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([post_id])
+}
+
+model like {
+  id        String   @id @default(uuid())
+  post_id   String
+  user_id   String
+  reaction  reaction
+  user_like users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post_like posts    @relation(fields: [post_id], references: [id], onDelete: Cascade)
+}
+
+model comments {
+  id             String          @id @default(uuid())
+  post_id        String
+  user_id        String
+  content        String
+  reply          reply[]
+  createdAt      DateTime        @default(now())
+  updateAt       DateTime        @updatedAt
+  user_comments  users           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  total_comments posts           @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  commentsLikes  comments_like[]
+}
+
+model comments_like {
+  id           String   @id @default(uuid())
+  comment_id   String
+  user_id      String
+  reaction     reaction
+  user_like    users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  comment_like comments @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+}
+
+model reply {
+  id          String      @id @default(uuid())
+  comments_id String
+  content     String
+  createdAt   DateTime    @default(now())
+  updateAt    DateTime    @updatedAt
+  replyLikes  replyLike[]
+  replyTo     comments    @relation(fields: [comments_id], references: [id], onDelete: Cascade)
+}
+
+model replyLike {
+  id        String   @id @default(uuid())
+  reply_id  String
+  reaction  reaction
+  createdAt DateTime @default(now())
+  updateAt  DateTime @updatedAt
+  replyTo   reply    @relation(fields: [reply_id], references: [id], onDelete: Cascade)
+}
+
+model bookmarks {
+  id             String @id @default(uuid())
+  user_id        String
+  post_id        String
+  user_bookmarks users  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post_bookmarks posts  @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, post_id])
+}
+
+enum Role {
+  user
+  admin
+}
+
+enum Status {
+  draft
+  published
+}
+
+enum reaction {
+  like
+  heart
+  love
+  laugh
+  wow
+  sad
+  angry
+}
