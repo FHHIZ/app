@@ -3,12 +3,16 @@
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "email": "email dev --dir src/emails"
   },
   "dependencies": {
     "@elysiajs/cookie": "^0.8.0",
     "@elysiajs/cors": "^1.4.0",
-    "elysia": "latest"
+    "@react-email/components": "^1.0.1",
+    "elysia": "latest",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@elysiajs/jwt": "^1.4.0",
@@ -16,6 +20,7 @@
     "@types/node": "^24.10.1",
     "bun-types": "^1.3.3",
     "prisma": "6.19.0",
+    "react-email": "^5.0.8",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },

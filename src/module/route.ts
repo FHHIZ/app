@@ -11,6 +11,35 @@ export const Route = new Elysia()
     "/api",
     (app) =>
       app
+        .onAfterHandle(({ responseValue, store }: any) => ({
+          success: true,
+          message: store.message ?? "Request Successful",
+          data: responseValue,
+        }))
+        .onError(({ error, code, set }) => {
+          switch (code) {
+            case "NOT_FOUND":
+              set.status = 404;
+              return { error: "Route not found" };
+            case "VALIDATION":
+              set.status = 422;
+              return { success: false, message: error.customError };
+            case "INTERNAL_SERVER_ERROR":
+              set.status = 500;
+              return { error: "Server Error :'(" };
+            case "PARSE":
+              return { success: false, message: error.message };
+            case "INVALID_COOKIE_SIGNATURE":
+              return { success: false, message: error.message };
+            case "INVALID_FILE_TYPE":
+              return { success: false, message: error.message };
+            case "UNKNOWN":
+              return { success: false, message: error.message };
+            default:
+              set.status = error.code;
+              return { success: false, message: error.response };
+          }
+        })
         .use(cookie())
         .use(AuthRoutes)
         .use(UserRoutes)

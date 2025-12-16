@@ -1,36 +1,31 @@
-import cookie from "@elysiajs/cookie";
+import { status } from "elysia";
 import { AuthService } from "./auth.service";
 
 export function AuthController() {
   return {
-    login: async ({
-      body,
-      status,
-      accJWT,
-      rfJWT,
-      cookie: { refresh },
-    }: any) => {
-      const { username, email, password } = body;
-      if (!email && !username && !password)
-        return "Please Insert Email or Username and Password";
-      else if (!email && !username) return "Please Insert Email or Username";
-      else if (!password) return "Please Insert Password";
+    login: async ({ body, store, accJWT, rfJWT, cookie: { refresh } }: any) => {
+      const { user, password } = body;
 
-      const user = await (email
-        ? AuthService.findByEmail(email)
-        : AuthService.findByUsername(username));
-      if (!user) {
-        return status(404, { error: "Account not Found" });
+      let usr;
+
+      if (user.includes("@")) {
+        usr = await AuthService.findByEmail(user);
+      } else {
+        usr = await AuthService.findByUsername(user);
       }
 
-      const pass = await Bun.password.verify(password, user.password);
+      if (!usr) {
+        throw status(404, "Invalid Email or Password");
+      }
+
+      const pass = await Bun.password.verify(password, usr.password);
       if (!pass) {
-        return status(400, { error: "Password is Incorrect" });
+        throw status(400, "Invalid Email or Password");
       }
 
-      const access_token = await accJWT.sign({ id: user.id });
+      const access_token = await accJWT.sign({ id: usr.id, role: usr.role });
       const refresh_token = await rfJWT.sign({
-        id: user.id,
+        id: usr.id,
         type: "refresh",
       });
 
@@ -41,35 +36,52 @@ export function AuthController() {
       refresh.path = "/";
       refresh.maxAge = 60 * 60 * 24 * 14; // 14 hari
 
+      store.message = "Login Successful";
+
       return {
-        success: true,
-        message: `Login Success. Welcome, ${user.name}`,
-        data: {
-          access_token,
-          photo: user.photo_profile,
-          name: user.name,
-          role: user.role,
+        user: {
+          name: usr.name,
+          photo: usr.photo_profile,
+          role: usr.role,
         },
+        access_token,
       };
     },
 
-    register: async ({ body, accJWT, rfJWT, cookie: { refresh } }: any) => {
-      const { name, username, email, password } = body;
+    register: async ({
+      body,
+      accJWT,
+      rfJWT,
+      cookie: { refresh },
+      store,
+    }: any) => {
+      const { name, username, email, password, photo_profile } = body;
 
       const isEmailExist = await AuthService.findByEmail(email);
       const isUsernameExist = await AuthService.findByUsername(username);
-      if (isEmailExist) return { error: "User already exist" };
-      else if (isUsernameExist) return { error: "Username was already taken" };
+      if (isEmailExist) throw status(409, "Email already exist");
+      else if (isUsernameExist) throw status(409, "Username already taken");
 
       const hide = await Bun.password.hash(password);
+
+      let filepath;
+
+      if (photo_profile) {
+        const buffer = Buffer.from(await photo_profile.arrayBuffer());
+        const filename = `${Date.now()}-${photo_profile.name}`;
+        filepath = `./uploads/profile/${filename}`;
+        await Bun.write(filepath, buffer);
+      }
+
       const user = await AuthService.register({
         name,
         username,
         email,
         password: hide,
+        ...(photo_profile ? { photo_profile: `${filepath}` } : {}),
       });
 
-      const access_token = await accJWT.sign({ id: user.id });
+      const access_token = await accJWT.sign({ id: user.id, role: user.role });
       const refresh_token = await rfJWT.sign({
         id: user.id,
         type: "refresh",
@@ -82,19 +94,19 @@ export function AuthController() {
       refresh.path = "/";
       refresh.maxAge = 60 * 60 * 24 * 14; // 14 hari
 
+      store.message = "Register Successful";
+
       return {
-        success: true,
-        message: `Register Success. Welcome, ${user.name}`,
-        data: {
-          access_token,
-          photo: user.photo_profile,
+        user: {
           name: user.name,
+          photo: user.photo_profile,
           role: user.role,
         },
+        access_token,
       };
     },
 
-    refresh: async ({ accJWT, rfJWT, cookie: { refresh } }: any) => {
+    refresh: async ({ accJWT, rfJWT, store, cookie: { refresh } }: any) => {
       const rftoken = refresh.value;
       const payload = await rfJWT.verify(rftoken);
       if (!payload) throw new Error(`invalid refresh token`);
@@ -106,7 +118,7 @@ export function AuthController() {
       const user = await AuthService.findById(payload.id);
       if (!user) throw new Error("Account Not Found");
 
-      const access_token = await accJWT.sign({ id: user.id });
+      const access_token = await accJWT.sign({ id: user.id, role: user.role });
       const refresh_token = await rfJWT.sign({
         id: user.id,
         type: "refresh",
@@ -119,20 +131,22 @@ export function AuthController() {
       refresh.path = "/";
       refresh.maxAge = 60 * 60 * 24 * 14; // 14 hari
 
+      store.message = "Refresh Successful";
+
       return {
-        success: true,
-        message: `Refresh Token Success, Welcome Back, ${user.name}`,
-        data: {
-          access_token,
-          photo: user.photo_profile,
+        user: {
           name: user.name,
+          photo: user.photo_profile,
           role: user.role,
         },
+        access_token,
       };
     },
 
-    logout: async ({ cookie: { refresh } }: any) => {
+    logout: async ({ cookie: { refresh }, store }: any) => {
+      if (!refresh.value) throw status(404, "You are not logged in");
       refresh.remove();
+      store.message = "Logout Successful";
     },
   };
 }

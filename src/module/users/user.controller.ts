@@ -4,100 +4,90 @@ import { UserService } from "./user.service";
 
 export function UserController() {
   return {
-    showMe: async ({ accJWT, request: { headers } }: any) => {
-      const auth = headers.get("authorization");
-      const [scheme, token] = auth.split(" ");
-      if (scheme === "Bearer") {
-        const payload = await accJWT.verify(token);
-        const profile = await UserService.checkProfile(payload.id);
-        return {
-          success: true,
-          message: `Your Profile`,
-          data: profile,
-        };
-      } else {
-        throw new Error("Oh uh, Somenthing is Wrong");
-      }
-    },
-
-    showAll: async ({ query }: { query?: Record<string, string> }) => {
-      const q = query?.q ?? "";
-      const profile = await UserService.readAllUser(q);
-
+    showMe: async ({ AuthRes, store }: any) => {
+      const user = await UserService.checkProfile(AuthRes.id);
+      store.message = `Your Profile`;
       return {
-        status: 200,
-        message: "Users Read Successfully",
-        data: profile,
+        user,
+        AuthRes,
       };
     },
 
-    showOne: async ({ params }: { params: { id: string } }) => {
+    showAll: async ({
+      query: { name, page, limit },
+      store,
+    }: {
+      query: { name?: string; page: number; limit: number };
+      store: any;
+    }) => {
+      const q = name ?? "";
+
+      const startIndex = (page - 1) * limit;
+      const endIndex = limit;
+
+      const profile = await UserService.readAllUser(q, startIndex, endIndex);
+
+      store.message = "Users Read Successfully";
+      return {
+        user: profile,
+      };
+    },
+
+    showOne: async ({
+      params,
+      store,
+    }: {
+      params: { id: string };
+      store: any;
+    }) => {
       const profile = await UserService.findById(params.id);
 
+      store.message = "User Read Successfully";
       return {
-        status: 200,
-        message: "User Read Successfully",
-        data: profile,
+        user: profile,
       };
     },
 
-    editMe: async ({ accJWT, request: { headers }, body }: any) => {
+    editMe: async ({ AuthRes, store, body }: any) => {
       const { name, photo_profile } = body;
 
-      const auth = headers.get("authorization");
-      const [scheme, token] = auth.split(" ");
-      if (scheme === "Bearer") {
-        const payload = await accJWT.verify(token);
+      const buffer = Buffer.from(await photo_profile.arrayBuffer());
+      const filename = `${Date.now()}-${photo_profile.name}`;
+      const filepath = `./uploads/profile/${filename}`;
 
-        const buffer = Buffer.from(await photo_profile.arrayBuffer());
-        const filename = `${Date.now()}-${photo_profile.name}`;
-        const filepath = `./uploads/${filename}`;
+      await Bun.write(filepath, buffer);
 
-        await Bun.write(filepath, buffer);
+      const user = await UserService.editProfile(AuthRes.id, {
+        name,
+        photo_profile: filepath,
+      });
 
-        const data = await UserService.editProfile(payload.id, {
-          name,
-          photo_profile: `/upload/${filename}`,
-        });
-
-        return {
-          success: true,
-          message: `Your Profile`,
-          data,
-        };
-      } else {
-        throw new Error("Oh uh, Somenthing is Wrong");
-      }
+      store.message = `Your Profile`;
+      return {
+        user,
+      };
     },
 
-    deleteAccount: async ({
-      body,
-      params,
-    }: {
-      body: any;
-      params: { id: string };
-    }) => {
+    deleteAccount: async ({ body, AuthRes }: { body: any; AuthRes: any }) => {
       const { username, email, password } = body;
       if (!email && !username && !password)
-        return "Please Insert Email or Username and Password";
-      else if (!email && !username) return "Please Insert Email or Username";
-      else if (!password) return "Please Insert Password";
+        throw status(400, "Please Insert Email or Username and Password");
+      else if (!email && !username)
+        throw status(400, "Please Insert Email or Username");
+      else if (!password) throw status(400, "Please Insert Password");
 
-      const accountVerify = await AuthService.findById(params.id);
+      const accountVerify = await AuthService.findById(AuthRes.id);
 
-      if (
-        email === accountVerify?.email ||
-        username === accountVerify?.username
-      ) {
+      if (email === accountVerify?.email) {
         const pass = await Bun.password.verify(
           password,
           accountVerify?.password!
         );
         if (!pass) {
-          return status(400, { error: "Invalid Email or Password" });
+          throw status(400, "Invalid Email or Password :)");
         }
 
-        const user = await UserService.deleteAccount(params.id);
+        const user = await UserService.deleteAccount(AuthRes.id);
         return {
           success: true,
           message: "Successfully Deleted",
@@ -106,8 +96,73 @@ export function UserController() {
           },
         };
       } else {
-        return status(400, { error: "Invalid Email or Password" });
+        throw status(400, "Invalid Email or Password");
       }
+    },
+
+    editAsAdmin: async ({
+      AuthRes,
+      body,
+      params,
+      store,
+    }: {
+      AuthRes: any;
+      body: { name?: string; photo_profile?: File };
+      params: { id: string };
+      store: any;
+    }) => {
+      if (AuthRes.role !== "admin") throw status(401, "Unauthorize");
+      const subjectEdit = await AuthService.findById(params.id);
+      if (subjectEdit?.role === "admin")
+        throw status(401, "Cannot edit other admin account");
+      else if (!subjectEdit) throw status(400, "Invalid Id");
+      if (!body.name && !body.photo_profile)
+        throw status(400, "Insert Somenthing");
+
+      let filepath;
+
+      if (body.photo_profile) {
+        const buffer = Buffer.from(await body.photo_profile.arrayBuffer());
+        const filename = `${Date.now()}-${body.photo_profile.name}`;
+        filepath = `./uploads/profile/${filename}`;
+
+        await Bun.write(filepath, buffer);
+      }
+
+      const user = await UserService.editProfile(params.id, {
+        ...(body.name ? { name: body.name } : {}),
+        ...(body.photo_profile ? { photo_profile: filepath } : {}),
+      });
+
+      store.message = `Successfully Edited ${subjectEdit.name}`;
+
+      return {
+        user,
+      };
+    },
+
+    deleteAsAdmin: async ({
+      AuthRes,
+      params,
+      store,
+    }: {
+      AuthRes: any;
+      params: { id: string };
+      store: any;
+    }) => {
+      if (AuthRes.role !== "admin")
+        throw status(401, `Unauthorize ${AuthRes.role}`);
+      const subjectEdit = await AuthService.findById(params.id);
+      if (subjectEdit?.role === "admin")
+        throw status(401, "Cannot edit other admin account");
+      else if (!subjectEdit) throw status(400, "Invalid Id");
+
+      const user = await UserService.deleteAccount(params.id);
+
+      store.message = `Successfully Deleted ${subjectEdit.name}`;
+      return {
+        user,
+      };
     },
   };
 }

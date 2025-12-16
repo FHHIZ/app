@@ -23,11 +23,7 @@ export function contentController() {
       };
     },
 
-    createContent: async ({ body, accJWT, request: { headers } }: any) => {
-      const auth = headers.get("authorization");
-      const [scheme, token] = auth.split(" ");
-      const payload = await accJWT.verify(token);
-
+    createContent: async ({ body, AuthRes }: any) => {
       const { slug, title, content, thumbnail, status } = body;
 
       const buffer = Buffer.from(await thumbnail.arrayBuffer());
@@ -37,7 +33,7 @@ export function contentController() {
       await Bun.write(filepath, buffer);
 
       const user = await contentService.createContent({
-        user_id: payload.id, // userId itu dari middleware protectedlayout
+        user_id: AuthRes.id,
         status,
         slug,
         title,
@@ -52,8 +48,14 @@ export function contentController() {
       };
     },
 
-    updateContent: async ({ body }: any) => {
-      const { id, slug, title, content, thumbnail } = body;
+    updateContent: async ({
+      params,
+      body,
+    }: {
+      params: { id: string };
+      body: any;
+    }) => {
+      const { slug, title, content, thumbnail } = body;
 
       let file: string = "";
 
@@ -68,7 +70,7 @@ export function contentController() {
       }
 
       const posts = await contentService.editContent({
-        id,
+        id: params.id,
         slug,
         title,
         content,

@@ -10,5 +10,5 @@ export const postRoutes = new Elysia({ prefix: "/content" })
   .post("/post", contentController().createContent, {
     body: ContentValidator().createContent,
   })
-  .put("/edit", contentController().updateContent)
+  .put("/edit/:id", contentController().updateContent)
   .delete("/delete/:id", contentController().deleteContent);

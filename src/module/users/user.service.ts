@@ -12,16 +12,19 @@ export const UserService = {
     });
   },
 
-  readAllUser: (query?: string) => {
-    if (query) {
-      return prisma.users.findMany({
-        omit: { id: true, email: true, password: true, createdAt: true },
-        where: { name: { contains: query }, username: { contains: query } },
-      });
-    } else
-      return prisma.users.findMany({
-        omit: { id: true, email: true, password: true, createdAt: true },
-      });
+  readAllUser: (q: string, start: number, end: number) => {
+    return prisma.users.findMany({
+      skip: start,
+      take: end,
+      omit: { id: true, email: true, password: true, createdAt: true },
+      ...(q
+        ? {
+            where: {
+              OR: [{ name: { contains: q } }, { username: { contains: q } }],
+            },
+          }
+        : {}),
+    });
   },
 
   findById: (data: string) => {
@@ -34,7 +37,12 @@ export const UserService = {
 
   editProfile: (id: string, data: editProfile) => {
     // if(data.id) delete data.id
-    return prisma.users.update({ where: { id }, data: data });
+
+    return prisma.users.update({
+      omit: { id: true, email: true, password: true, createdAt: true },
+      where: { id },
+      data: data,
+    });
   },
 
   deleteAccount: (id: string) => {

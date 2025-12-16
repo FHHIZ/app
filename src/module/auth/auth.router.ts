@@ -12,4 +12,4 @@ export const AuthRoutes = new Elysia({ prefix: "/auth" })
     body: AuthValidator.register,
   })
   .post("/refresh", AuthController().refresh)
-  .get("/logout", AuthController().logout);
+  .delete("/logout", AuthController().logout);
